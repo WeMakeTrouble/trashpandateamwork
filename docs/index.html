@@ -12,7 +12,7 @@
     <div class="container">
         <h1>🦝 Trash Panda Teamwork</h1>
         <p class="subtitle">Talk to your diary, get SMS reminders</p>
-        
+
         <div class="setup-section" id="setupSection">
             <h3>📱 SMS Setup</h3>
             <p>Enter your Twilio credentials and phone number:</p>
@@ -22,7 +22,7 @@
             <div class="form-group"><label for="phoneNumber">Your Phone Number (to receive SMS):</label><input type="tel" id="phoneNumber" placeholder="+61412345678" /></div>
             <button class="save-config-btn" id="saveBtn">Save & Enable App</button>
         </div>
-        
+
         <div id="mainApp" class="hidden">
             <button id="voiceBtn" class="voice-button"><span id="btnText">🎙️</span></button>
             <div class="status" id="status">Click microphone to start</div>
@@ -31,20 +31,57 @@
             <div class="sms-log" id="smsLog"><h3>📱 SMS Log:</h3><div id="smsMessages"></div></div>
             <div class="diary-entries"><h3>📖 Recent Entries</h3><button class="clear-btn" id="clearBtn">Clear All</button><div id="entriesList"></div></div>
         </div>
-        
+
         <div id="errorMsg" class="error-message hidden"><strong>Error:</strong> <span id="errorText"></span></div>
         <div id="successMsg" class="success-message hidden"><span id="successText"></span></div>
     </div>
 
     <script>
-        // ######################################################################
-        // # IMPORTANT: You will need to replace the placeholder URL below with #
-        // # the real URL you get from Render after deploying your backend.     #
-        // ######################################################################
         const BACKEND_URL = 'https://trashpandateamwork.onrender.com';
 
-        // --- The rest of your JavaScript code... ---
         let recognition = null, isRecording = !1, entries = [], config = {}, smsMessages = [];
-        const setupSection = document.getElementById("setupSection"), mainApp = document.getElementById("mainApp"), voiceBtn = document.getElementById("voiceBtn"), btnText = document.getElementById("btnText"), status = document.getElementById("status"), transcript = document.getElementById("transcript"), extractedTasks = document.getElementById("extractedTasks"), taskList = document.getElementById("taskList"), smsLog = document.getElementById("smsLog"), smsMessagesDiv = document.getElementById("smsMessages"), errorMsg = document.getElementById("errorMsg"), errorText = document.getElementById("errorText"), successMsg = document.getElementById("successMsg"), successText = document.getElementById("successText");
-        function safeSetItem(e,t){try{return"undefined"!=typeof Storage&&localStorage?(localStorage.setItem(e,t),!0):!1}catch(e){return console.log("Storage not available:",e.message),!1}}function safeGetItem(e){try{if("undefined"!=typeof Storage&&localStorage)return localStorage.getItem(e)}catch(e){return console.log("Storage not available:",e.message),null}return null}function safeRemoveItem(e){try{if("undefined"!=typeof Storage&&localStorage)return localStorage.removeItem(e),!0}catch(e){return console.log("Storage not available:",e.message),!1}return!1}function loadData(){try{const e=safeGetItem("diaryEntries"),t=safeGetItem("twilioConfig"),o=safeGetItem("smsMessages");entries=e?JSON.parse(e):[],config=t?JSON.parse(t):{},smsMessages=o?JSON.parse(o):[]}catch(e){console.log("Error loading data:",e),entries=[],config={},smsMessages=[]}}
-        function initSpeechRecognition(){return"webkitSpeechRecognition"in window?recognition=new webkitSpeechRecognition:"SpeechRecognition"in window?recognition=new SpeechRecognition:!showError("Speech recognition not supported. Please use Safari or Chrome."),recognition.continuous=!1,recognition.interimResults=!0,recognition.lang="en-AU",recognition.maxAlternatives=1,recognition.onstart=function(){console.log("Speech recognition started"),hideMessages(),showSuccess("Listening... speak now!")},recognition.onresult=function(e){let t="",o="";for(let n=e.resultIndex;n<e.results.length;n++){const s=e.results[n][0].transcript;e.results[n].isFinal?t+=s+" ":o+=s}transcript.innerHTML="<strong>✅ Final:</strong> "+t+"<br><em>🎤 Current:</em> "+o,t.trim()&&(transcript.classList.add("has-content
+        // --- This line is intentionally long to keep the function definitions on single lines ---
+        const setupSection=document.getElementById("setupSection"),mainApp=document.getElementById("mainApp"),voiceBtn=document.getElementById("voiceBtn"),btnText=document.getElementById("btnText"),status=document.getElementById("status"),transcript=document.getElementById("transcript"),extractedTasks=document.getElementById("extractedTasks"),taskList=document.getElementById("taskList"),smsLog=document.getElementById("smsLog"),smsMessagesDiv=document.getElementById("smsMessages"),errorMsg=document.getElementById("errorMsg"),errorText=document.getElementById("errorText"),successMsg=document.getElementById("successMsg"),successText=document.getElementById("successText");function safeSetItem(e,t){try{return"undefined"!=typeof Storage&&localStorage?(localStorage.setItem(e,t),!0):!1}catch(e){return console.log("Storage not available:",e.message),!1}}function safeGetItem(e){try{if("undefined"!=typeof Storage&&localStorage)return localStorage.getItem(e)}catch(e){return console.log("Storage not available:",e.message),null}return null}function safeRemoveItem(e){try{if("undefined"!=typeof Storage&&localStorage)return localStorage.removeItem(e),!0}catch(e){return console.log("Storage not available:",e.message),!1}return!1}function loadData(){try{const e=safeGetItem("diaryEntries"),t=safeGetItem("twilioConfig"),o=safeGetItem("smsMessages");entries=e?JSON.parse(e):[],config=t?JSON.parse(t):{},smsMessages=o?JSON.parse(o):[]}catch(e){console.log("Error loading data:",e),entries=[],config={},smsMessages=[]}}function initSpeechRecognition(){return"webkitSpeechRecognition"in window?recognition=new webkitSpeechRecognition:"SpeechRecognition"in window?recognition=new SpeechRecognition:!showError("Speech recognition not supported. Please use Safari or Chrome."),recognition.continuous=!1,recognition.interimResults=!0,recognition.lang="en-AU",recognition.maxAlternatives=1,recognition.onstart=function(){console.log("Speech recognition started"),hideMessages(),showSuccess("Listening... speak now!")},recognition.onresult=function(e){let t="",o="";for(let n=e.resultIndex;n<e.results.length;n++){const s=e.results[n][0].transcript;e.results[n].isFinal?t+=s+" ":o+=s}transcript.innerHTML="<strong>✅ Final:</strong> "+t+"<br><em>🎤 Current:</em> "+o,t.trim()&&(transcript.classList.add("has-content"),processTranscript(t.trim()))},recognition.onend=function(){console.log("Speech recognition ended"),stopRecording()},recognition.onerror=function(e){console.log("Speech recognition error:",e.error);let t="Speech recognition error: "+e.error;"not-allowed"===e.error?t="Microphone access denied. Please allow microphone access and try again.":"no-speech"===e.error?t="No speech detected. Please try speaking again.":"network"===e.error&&(t="Network error. Please check your connection."),showError(t),stopRecording()},!0}
+        function showError(e){errorText.textContent=e,errorMsg.classList.remove("hidden"),successMsg.classList.add("hidden")}function showSuccess(e){successText.textContent=e,successMsg.classList.remove("hidden"),errorMsg.classList.add("hidden")}function hideMessages(){errorMsg.classList.add("hidden"),successMsg.classList.add("hidden")}async function saveConfig(){config={twilioSid:document.getElementById("twilioSid").value.trim(),twilioToken:document.getElementById("twilioToken").value.trim(),twilioFrom:document.getElementById("twilioFrom").value.trim(),phoneNumber:document.getElementById("phoneNumber").value.trim()};if(!config.twilioSid||!config.twilioToken||!config.twilioFrom||!config.phoneNumber)return showError("Please fill in all fields");safeSetItem("twilioConfig",JSON.stringify(config)),showSuccess("Configuration saved! App enabled."),setTimeout(()=>{hideMessages(),showMainApp()},1500)}
+        function showMainApp(){setupSection.classList.add("hidden"),mainApp.classList.remove("hidden"),voiceBtn.classList.add("enabled"),status.textContent="Click microphone to start recording",initSpeechRecognition()&&(updateEntriesDisplay(),updateSMSLog())}function toggleRecording(){recognition?isRecording?stopRecording():startRecording():showError("Speech recognition not available")}function startRecording(){if(!recognition)return;isRecording=!0,voiceBtn.classList.add("recording"),btnText.textContent="⏹️",status.textContent="Recording... tap to stop",transcript.textContent="Listening for your voice...",transcript.classList.remove("has-content"),hideMessages(),recognition.start()}
+        function stopRecording(){isRecording=!1,voiceBtn.classList.remove("recording"),btnText.textContent="🎙️",status.textContent="Click microphone to record again",recognition&&recognition.stop()}function processTranscript(e){const t={id:Date.now(),text:e,date:(new Date).toLocaleString(),tasks:extractTasks(e)};entries.unshift(t),safeSetItem("diaryEntries",JSON.stringify(entries)),updateEntriesDisplay(),t.tasks.length>0?(displayTasks(t.tasks),extractedTasks.classList.add("show"),autoSendImportantReminders(t.tasks),showSuccess(`Entry saved! Found ${t.tasks.length} reminders.`),status.textContent=`Found ${t.tasks.length} reminders!`):(showSuccess("Entry saved! No reminders found."),status.textContent="Entry saved. No reminders found."),setTimeout(hideMessages,3e3)}
+        function parseScheduledTime(e){const t=e.toLowerCase(),o=new Date;if(t.includes("tomorrow")){const e=new Date(o);return e.setDate(o.getDate()+1),e.setHours(9,0,0,0),e}if(t.includes("tonight")){const e=new Date(o);return e.setHours(19,0,0,0),e}if(t.includes("next week")){const e=new Date(o);return e.setDate(o.getDate()+7),e.setHours(9,0,0,0),e}if(t.includes("this weekend")){const e=new Date(o),t=6-o.getDay();return e.setDate(o.getDate()+t),e.setHours(10,0,0,0),e}if(t.includes("later today")){const e=new Date(o);return e.setHours(o.getHours()+2),e}const n=t.match(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);if(n){const t=new Date(o);let s=parseInt(n[1]);const a=parseInt(n[2]||0),i=n[3];return"pm"===i&&12!==s&&(s+=12),"am"===i&&12===s&&(s=0),t.setHours(s,a,0,0),t<o&&t.setDate(o.getDate()+1),t}return null}
+        function extractTasks(e){const t=[];return[{regex:/(?:need to|have to|must|should|gotta|got to)\s+([^.!?]+)/gi,type:"task",priority:"medium"},{regex:/(?:remember to|don't forget to|remind me to)\s+([^.!?]+)/gi,type:"reminder",priority:"high"},{regex:/(?:tomorrow|next week|later today|this weekend|tonight)\s+([^.!?]*)/gi,type:"scheduled",priority:"high"},{regex:/(?:call|text|email|contact|ring)\s+([^.!?]+)/gi,type:"communication",priority:"medium"},{regex:/(?:buy|pick up|get|purchase|grab)\s+([^.!?]+)/gi,type:"shopping",priority:"low"},{regex:/(?:urgent|important|asap|immediately|crucial)\s+([^.!?]+)/gi,type:"urgent",priority:"high"},{regex:/(?:book|schedule|make an appointment)\s+([^.!?]+)/gi,type:"appointment",priority:"medium"}].forEach(o=>{let n;for(;"null"!==(n=o.regex.exec(e));){const e=parseScheduledTime(n[0]);t.push({text:n[0].trim(),type:o.type,priority:o.priority,extracted:n[1].trim(),scheduledTime:e,id:Date.now()+Math.random()})}}),t}
+        function displayTasks(e){taskList.innerHTML="",e.forEach(e=>{const t=document.createElement("div");t.className="task-item";const o="high"===e.priority?"🔥":"medium"===e.priority?"⚡":"📝";let n="";e.scheduledTime&&(n=`<br><small>⏰ Scheduled for: ${e.scheduledTime.toLocaleString()}</small>`),t.innerHTML=`<div><strong>${o} ${e.type}:</strong> ${e.extracted}<br><small>From: "${e.text}"</small>${n}<br><button class="send-sms-btn" data-task-id="${e.id}">Send SMS Now</button></div>`,taskList.appendChild(t)}),taskList.querySelectorAll(".send-sms-btn").forEach(e=>{e.addEventListener("click",function(){sendTaskSMS(this.getAttribute("data-task-id"))})})}
+        function autoSendImportantReminders(e){e.forEach(e=>{"high"!==e.priority&&"urgent"!==e.type||setTimeout(()=>sendTaskSMS(e.id,!0),1e3)})}async function sendTaskSMS(e,t=!1){const o=findTaskById(e);if(!o)return;const n=`🦝 Trash Panda Reminder: ${o.extracted}`,s=taskList.querySelectorAll(`[data-task-id="${e}"]`);s.forEach(e=>{e.textContent="Sending...",e.disabled=!0});try{const a=await fetch(`${BACKEND_URL}/send-sms`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({twilioSid:config.twilioSid,twilioToken:config.twilioToken,twilioFrom:config.twilioFrom,phoneNumber:config.phoneNumber,message:n})}),i=await a.json();if(!a.ok||!i.success)throw new Error(i.error||"Unknown server error");console.log("Server confirmed SMS sent:",i.sid),logSMSMessage(n,t?"auto-sent (Real)":"manual-sent (Real)"),t||showSuccess("Real SMS sent successfully!"),s.forEach(e=>{e.textContent="Sent!"})}catch(e){console.error("Error sending SMS:",e),showError(`Failed to send SMS: ${e.message}`),logSMSMessage(`Failed: ${n}`,"failed"),s.forEach(e=>{e.textContent="Send SMS Now",e.disabled=!1})}finally{updateSMSLog(),t||setTimeout(hideMessages,3e3)}}
+        function findTaskById(e){for(let t of entries){const o=t.tasks.find(t=>t.id==e);if(o)return o}return null}function logSMSMessage(e,t){smsMessages.unshift({message:e,status:t,timestamp:(new Date).toLocaleString()}),safeSetItem("smsMessages",JSON.stringify(smsMessages))}
+        function updateSMSLog(){if(0===smsMessages.length)return void smsLog.classList.remove("show");smsLog.classList.add("show"),smsMessagesDiv.innerHTML="",smsMessages.slice(0,10).forEach(e=>{const t=document.createElement("div");t.className="sms-message";const o="auto-sent (Real)"===e.status?"🤖":"👤";t.innerHTML=`<strong>${o} ${e.timestamp}</strong><br>${e.message}`,smsMessagesDiv.appendChild(t)})}function updateEntriesDisplay(){entriesList.innerHTML="",entries.slice(0,5).forEach(e=>{const t=document.createElement("div");t.className="diary-entry",t.innerHTML=`<div class="entry-date">${e.date}</div><div>${e.text}</div>`+(e.tasks.length>0?`<small>📝 ${e.tasks.length} reminders found</small>`:""),entriesList.appendChild(t)})}
+        function clearEntries(){confirm("Clear all entries and SMS logs?")&&(entries=[],smsMessages=[],safeRemoveItem("diaryEntries"),safeRemoveItem("smsMessages"),updateEntriesDisplay(),updateSMSLog(),extractedTasks.classList.remove("show"),smsLog.classList.remove("show"),showSuccess("All data cleared!"),setTimeout(hideMessages,2e3))}
+        
+        // Initialize the app
+        loadData();
+        if (config.twilioSid && config.phoneNumber) {
+            document.getElementById('twilioSid').value = config.twilioSid;
+            document.getElementById('twilioToken').value = config.twilioToken;
+            document.getElementById('twilioFrom').value = config.twilioFrom;
+            document.getElementById('phoneNumber').value = config.phoneNumber;
+            showMainApp();
+        }
+
+        // ########## THIS IS THE NEW, CORRECTED CODE ##########
+        // Wait until the entire HTML page is loaded before attaching event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Re-select the buttons inside this function to be safe
+            const saveButton = document.getElementById('saveBtn');
+            const clearButton = document.getElementById('clearBtn');
+            const voiceButton = document.getElementById('voiceBtn');
+
+            if (saveButton) {
+                saveButton.addEventListener('click', saveConfig);
+            }
+            if (clearButton) {
+                clearButton.addEventListener('click', clearEntries);
+            }
+            if (voiceButton) {
+                voiceButton.addEventListener('click', toggleRecording);
+            }
+        });
+
+    </script>
+</body>
+</html>
