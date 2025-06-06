@@ -21,6 +21,7 @@
             <div class="form-group"><label for="twilioFrom">Twilio Phone Number:</label><input type="tel" id="twilioFrom" placeholder="+15017122661" /></div>
             <div class="form-group"><label for="phoneNumber">Your Phone Number (to receive SMS):</label><input type="tel" id="phoneNumber" placeholder="+61412345678" /></div>
             <button class="save-config-btn" id="saveBtn">Save & Enable App</button>
+            <button class="save-config-btn" id="testBtn" style="background-color: #f0ad4e; margin-top: 10px;">Test Backend Connection</button>
         </div>
 
         <div id="mainApp" class="hidden">
@@ -37,7 +38,6 @@
     </div>
 
     <script>
-        // Forcing a redeploy at 12:15 AM
         const BACKEND_URL = 'https://trashpandateamwork.onrender.com';
 
         let recognition = null, isRecording = !1, entries = [], config = {}, smsMessages = [];
@@ -48,48 +48,33 @@
         function showMainApp(){setupSection.classList.add("hidden"),mainApp.classList.remove("hidden"),voiceBtn.classList.add("enabled"),status.textContent="Click microphone to start recording",initSpeechRecognition()&&(updateEntriesDisplay(),updateSMSLog())}function toggleRecording(){recognition?isRecording?stopRecording():startRecording():showError("Speech recognition not available")}function startRecording(){if(!recognition)return;isRecording=!0,voiceBtn.classList.add("recording"),btnText.textContent="⏹️",status.textContent="Recording... tap to stop",transcript.textContent="Listening for your voice...",transcript.classList.remove("has-content"),hideMessages(),recognition.start()}
         function stopRecording(){isRecording=!1,voiceBtn.classList.remove("recording"),btnText.textContent="🎙️",status.textContent="Click microphone to record again",recognition&&recognition.stop()}function processTranscript(e){const t={id:Date.now(),text:e,date:(new Date).toLocaleString(),tasks:extractTasks(e)};entries.unshift(t),safeSetItem("diaryEntries",JSON.stringify(entries)),updateEntriesDisplay(),t.tasks.length>0?(displayTasks(t.tasks),extractedTasks.classList.add("show"),autoSendImportantReminders(t.tasks),showSuccess(`Entry saved! Found ${t.tasks.length} reminders.`),status.textContent=`Found ${t.tasks.length} reminders!`):(showSuccess("Entry saved! No reminders found."),status.textContent="Entry saved. No reminders found."),setTimeout(hideMessages,3e3)}
         function parseScheduledTime(e){const t=e.toLowerCase(),o=new Date;if(t.includes("tomorrow")){const e=new Date(o);return e.setDate(o.getDate()+1),e.setHours(9,0,0,0),e}if(t.includes("tonight")){const e=new Date(o);return e.setHours(19,0,0,0),e}if(t.includes("next week")){const e=new Date(o);return e.setDate(o.getDate()+7),e.setHours(9,0,0,0),e}if(t.includes("this weekend")){const e=new Date(o),t=6-o.getDay();return e.setDate(o.getDate()+t),e.setHours(10,0,0,0),e}if(t.includes("later today")){const e=new Date(o);return e.setHours(o.getHours()+2),e}const n=t.match(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);if(n){const t=new Date(o);let s=parseInt(n[1]);const a=parseInt(n[2]||0),i=n[3];return"pm"===i&&12!==s&&(s+=12),"am"===i&&12===s&&(s=0),t.setHours(s,a,0,0),t<o&&t.setDate(o.getDate()+1),t}return null}
-        
-        // ########## THIS IS THE NEW, CORRECTED FUNCTION ##########
-        function extractTasks(text) {
-            const tasks = [];
-            const patterns = [
-                { regex: /(?:need to|have to|must|should|gotta|got to)\s+([^.!?]+)/gi, type: 'task', priority: 'medium' },
-                { regex: /(?:remember to|don't forget to|remind me to)\s+([^.!?]+)/gi, type: 'reminder', priority: 'high' },
-                { regex: /(?:tomorrow|next week|later today|this weekend|tonight)\s+([^.!?]*)/gi, type: 'scheduled', priority: 'high' },
-                { regex: /(?:call|text|email|contact|ring)\s+([^.!?]+)/gi, type: 'communication', priority: 'medium' },
-                { regex: /(?:buy|pick up|get|purchase|grab)\s+([^.!?]+)/gi, type: 'shopping', priority: 'low' },
-                { regex: /(?:urgent|important|asap|immediately|crucial)\s+([^.!?]+)/gi, type: 'urgent', priority: 'high' },
-                { regex: /(?:book|schedule|make an appointment)\s+([^.!?]+)/gi, type: 'appointment', priority: 'medium' }
-            ];
-            
-            patterns.forEach(pattern => {
-                let match;
-                // Important: We reset the regex index before each loop
-                pattern.regex.lastIndex = 0;
-                while ((match = pattern.regex.exec(text)) !== null) {
-                    // This 'if' block prevents the error. We only proceed if the match is valid.
-                    if (match && match[1]) {
-                        const scheduledTime = parseScheduledTime(match[0]);
-                        tasks.push({
-                            text: match[0].trim(),
-                            type: pattern.type,
-                            priority: pattern.priority,
-                            extracted: match[1].trim(),
-                            scheduledTime: scheduledTime,
-                            id: Date.now() + Math.random()
-                        });
-                    }
-                }
-            });
-            return tasks;
-        }
-
+        function extractTasks(e){const t=[];return[{regex:/(?:need to|have to|must|should|gotta|got to)\s+([^.!?]+)/gi,type:"task",priority:"medium"},{regex:/(?:remember to|don't forget to|remind me to)\s+([^.!?]+)/gi,type:"reminder",priority:"high"},{regex:/(?:tomorrow|next week|later today|this weekend|tonight)\s+([^.!?]*)/gi,type:"scheduled",priority:"high"},{regex:/(?:call|text|email|contact|ring)\s+([^.!?]+)/gi,type:"communication",priority:"medium"},{regex:/(?:buy|pick up|get|purchase|grab)\s+([^.!?]+)/gi,type:"shopping",priority:"low"},{regex:/(?:urgent|important|asap|immediately|crucial)\s+([^.!?]+)/gi,type:"urgent",priority:"high"},{regex:/(?:book|schedule|make an appointment)\s+([^.!?]+)/gi,type:"appointment",priority:"medium"}].forEach(o=>{let n;o.regex.lastIndex=0;for(;"null"!==(n=o.regex.exec(e));)n&&n[1]&&t.push({text:n[0].trim(),type:o.type,priority:o.priority,extracted:n[1].trim(),scheduledTime:parseScheduledTime(n[0]),id:Date.now()+Math.random()})}),t}
         function displayTasks(e){taskList.innerHTML="",e.forEach(e=>{const t=document.createElement("div");t.className="task-item";const o="high"===e.priority?"🔥":"medium"===e.priority?"⚡":"📝";let n="";e.scheduledTime&&(n=`<br><small>⏰ Scheduled for: ${e.scheduledTime.toLocaleString()}</small>`),t.innerHTML=`<div><strong>${o} ${e.type}:</strong> ${e.extracted}<br><small>From: "${e.text}"</small>${n}<br><button class="send-sms-btn" data-task-id="${e.id}">Send SMS Now</button></div>`,taskList.appendChild(t)}),taskList.querySelectorAll(".send-sms-btn").forEach(e=>{e.addEventListener("click",function(){sendTaskSMS(this.getAttribute("data-task-id"))})})}
         function autoSendImportantReminders(e){e.forEach(e=>{"high"!==e.priority&&"urgent"!==e.type||setTimeout(()=>sendTaskSMS(e.id,!0),1e3)})}async function sendTaskSMS(e,t=!1){const o=findTaskById(e);if(!o)return;const n=`🦝 Trash Panda Reminder: ${o.extracted}`,s=taskList.querySelectorAll(`[data-task-id="${e}"]`);s.forEach(e=>{e.textContent="Sending...",e.disabled=!0});try{const a=await fetch(`${BACKEND_URL}/send-sms`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({twilioSid:config.twilioSid,twilioToken:config.twilioToken,twilioFrom:config.twilioFrom,phoneNumber:config.phoneNumber,message:n})}),i=await a.json();if(!a.ok||!i.success)throw new Error(i.error||"Unknown server error");console.log("Server confirmed SMS sent:",i.sid),logSMSMessage(n,t?"auto-sent (Real)":"manual-sent (Real)"),t||showSuccess("Real SMS sent successfully!"),s.forEach(e=>{e.textContent="Sent!"})}catch(e){console.error("Error sending SMS:",e),showError(`Failed to send SMS: ${e.message}`),logSMSMessage(`Failed: ${n}`,"failed"),s.forEach(e=>{e.textContent="Send SMS Now",e.disabled=!1})}finally{updateSMSLog(),t||setTimeout(hideMessages,3e3)}}
         function findTaskById(e){for(let t of entries){const o=t.tasks.find(t=>t.id==e);if(o)return o}return null}function logSMSMessage(e,t){smsMessages.unshift({message:e,status:t,timestamp:(new Date).toLocaleString()}),safeSetItem("smsMessages",JSON.stringify(smsMessages))}
         function updateSMSLog(){if(0===smsMessages.length)return void smsLog.classList.remove("show");smsLog.classList.add("show"),smsMessagesDiv.innerHTML="",smsMessages.slice(0,10).forEach(e=>{const t=document.createElement("div");t.className="sms-message";const o="auto-sent (Real)"===e.status?"🤖":"👤";t.innerHTML=`<strong>${o} ${e.timestamp}</strong><br>${e.message}`,smsMessagesDiv.appendChild(t)})}function updateEntriesDisplay(){entriesList.innerHTML="",entries.slice(0,5).forEach(e=>{const t=document.createElement("div");t.className="diary-entry",t.innerHTML=`<div class="entry-date">${e.date}</div><div>${e.text}</div>`+(e.tasks.length>0?`<small>📝 ${e.tasks.length} reminders found</small>`:""),entriesList.appendChild(t)})}
         function clearEntries(){confirm("Clear all entries and SMS logs?")&&(entries=[],smsMessages=[],safeRemoveItem("diaryEntries"),safeRemoveItem("smsMessages"),updateEntriesDisplay(),updateSMSLog(),extractedTasks.classList.remove("show"),smsLog.classList.remove("show"),showSuccess("All data cleared!"),setTimeout(hideMessages,2e3))}
         
+        // New Test Function
+        async function testBackend() {
+            console.log("Testing backend connection...");
+            showSuccess("Pinging backend... check console for logs.");
+            try {
+                const response = await fetch(BACKEND_URL); // Simple GET request
+                const text = await response.text();
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}: ${text}`);
+                }
+                console.log("Backend response:", text);
+                showSuccess(`Backend is alive! Response: "${text}"`);
+            } catch (error) {
+                console.error("Backend test failed:", error);
+                showError(`Backend test failed: ${error.message}`);
+            } finally {
+                setTimeout(hideMessages, 4000);
+            }
+        }
+
         // Initialize the app
         loadData();
         if (config.twilioSid && config.phoneNumber) {
@@ -104,10 +89,12 @@
             const saveButton = document.getElementById('saveBtn');
             const clearButton = document.getElementById('clearBtn');
             const voiceButton = document.getElementById('voiceBtn');
+            const testButton = document.getElementById('testBtn'); // Get the new button
 
             if (saveButton) saveButton.addEventListener('click', saveConfig);
             if (clearButton) clearButton.addEventListener('click', clearEntries);
             if (voiceButton) voiceButton.addEventListener('click', toggleRecording);
+            if (testButton) testButton.addEventListener('click', testBackend); // Attach a listener
         });
 
     </script>
