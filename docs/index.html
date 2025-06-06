@@ -34,6 +34,8 @@
     <script>
         const BACKEND_URL = 'https://trashpandateamwork.onrender.com';
         let recognition = null, isRecording = false, config = {}, smsMessages = [], finalTranscript = '';
+        let tasks = []; // Global tasks array
+        
         const setupSection = document.getElementById("setupSection"), mainApp = document.getElementById("mainApp"), voiceBtn = document.getElementById("voiceBtn"), btnText = document.getElementById("btnText"), status = document.getElementById("status"), transcript = document.getElementById("transcript"), extractedTasks = document.getElementById("extractedTasks"), taskList = document.getElementById("taskList"), smsLog = document.getElementById("smsLog"), smsMessagesDiv = document.getElementById("smsMessages"), errorMsg = document.getElementById("errorMsg"), errorText = document.getElementById("errorText"), successMsg = document.getElementById("successMsg"), successText = document.getElementById("successText");
         
         function initSpeechRecognition() {
@@ -115,7 +117,7 @@
         function stopRecording() { if (recognition && isRecording) { recognition.stop(); } }
 
         function processTranscript(text) {
-            const tasks = extractTasks(text);
+            tasks = extractTasks(text); // Update global tasks array
             if (tasks.length > 0) {
                 displayTasks(tasks);
                 extractedTasks.classList.add('show');
@@ -136,8 +138,8 @@
             const dayMonthRegex = new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+of\\s+(${Object.keys(months).join('|')})`, 'i');
             let dateMatch = lowerText.match(monthDayRegex) || lowerText.match(dayMonthRegex);
             if (dateMatch) {
-                const day = parseInt(dateMatch[1]) || parseInt(dateMatch[2]);
-                const monthName = (dateMatch[1] || dateMatch[2]).toLowerCase().substring(0,3);
+                const day = parseInt(dateMatch[2]) || parseInt(dateMatch[1]);
+                const monthName = (dateMatch[1] || dateMatch[3]).toLowerCase().substring(0,3);
                 scheduledDate = new Date();
                 scheduledDate.setHours(9, 0, 0, 0);
                 scheduledDate.setMonth(months[monthName], day);
@@ -175,23 +177,23 @@
         }
 
         function extractTasks(text) {
-            const tasks = [];
+            const localTasks = [];
             const patterns = [{ regex: /(?:remind me to|don't forget to|need to|have to|must)\s+(.+)/gi, type: 'reminder', priority: 'high' }];
             patterns.forEach(pattern => {
                 let match;
                 pattern.regex.lastIndex = 0;
                 while ((match = pattern.regex.exec(text)) !== null) {
                     if (match && match[1]) {
-                        tasks.push({ text: match[0].trim(), extracted: match[1].trim(), scheduledTime: parseScheduledTime(match[1]), id: Date.now() + Math.random() });
+                        localTasks.push({ text: match[0].trim(), extracted: match[1].trim(), scheduledTime: parseScheduledTime(match[1]), id: Date.now() + Math.random() });
                     }
                 }
             });
-            return tasks;
+            return localTasks;
         }
 
-        function displayTasks(tasks) {
+        function displayTasks(tasksToDisplay) {
             taskList.innerHTML = "";
-            tasks.forEach(task => {
+            tasksToDisplay.forEach(task => {
                 const taskElement = document.createElement('div');
                 taskElement.className = 'task-item';
                 let scheduleInfo = '';
@@ -199,39 +201,52 @@
                 taskElement.innerHTML = `<div><strong>🔥 Reminder:</strong> ${task.extracted}${scheduleInfo}<br><button class="send-sms-btn" data-task-id="${task.id}">Send SMS Now</button></div>`;
                 taskList.appendChild(taskElement);
             });
-            taskList.querySelectorAll('.send-sms-btn').forEach(btn => btn.addEventListener('click', function() { sendTaskSMS(this.getAttribute('data-task-id')); }));
+            taskList.querySelectorAll('.send-sms-btn').forEach(btn => btn.addEventListener('click', function() { sendTaskSMS(parseFloat(this.getAttribute('data-task-id')), false); }));
         }
 
-        function autoSendImportantReminders(tasks) { tasks.forEach(task => { if (task.scheduledTime) setTimeout(() => sendTaskSMS(task.id, true), 1000); }); }
+        function autoSendImportantReminders(tasksToAutoSend) { 
+            tasksToAutoSend.forEach(task => { 
+                if (task.scheduledTime) {
+                    setTimeout(() => sendTaskSMS(task.id, true), 1000);
+                }
+            }); 
+        }
         
+        // ########## THIS IS THE NEW, SIMPLIFIED FUNCTION ##########
         async function sendTaskSMS(taskId, auto = false) {
-            const allTasks = Array.from(document.querySelectorAll('.task-item')).map(el => {
-                const button = el.querySelector('button');
-                const textContent = el.querySelector('strong').nextSibling.textContent.trim();
-                const scheduledTimeText = el.querySelector('small') ? el.querySelector('small').textContent : '';
-                return {
-                    id: parseFloat(button.getAttribute('data-task-id')),
-                    extracted: textContent,
-                    scheduledTime: scheduledTimeText ? new Date(scheduledTimeText.replace('Scheduled: ','')) : null
-                };
-            });
-            const task = allTasks.find(t => t.id === taskId);
-            if (!task) return;
+            // Find the specific task from the global 'tasks' array using its ID
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) {
+                showError("Could not find the task to send. Please try again.");
+                return;
+            }
+
             const message = `🦝 Reminder: ${task.extracted}`;
             const payload = {
-                twilioSid: config.twilioSid, twilioToken: config.twilioToken, messagingServiceSid: config.messagingServiceSid, phoneNumber: config.phoneNumber, message: message
+                twilioSid: config.twilioSid, 
+                twilioToken: config.twilioToken, 
+                messagingServiceSid: config.messagingServiceSid, 
+                phoneNumber: config.phoneNumber, 
+                message: message
             };
-            if (task.scheduledTime) payload.scheduledTime = task.scheduledTime;
+            // Only add scheduledTime to payload if it exists
+            if (task.scheduledTime) {
+                payload.scheduledTime = task.scheduledTime;
+            }
+
             const buttons = taskList.querySelectorAll(`[data-task-id="${taskId}"]`);
             buttons.forEach(btn => { btn.textContent = "Sending..."; btn.disabled = true; });
+
             try {
                 const response = await fetch(`${BACKEND_URL}/send-sms`, { method: 'POST', headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                 const result = await response.json();
                 if (!response.ok || !result.success) throw new Error(result.error || "Unknown server error");
+                
                 const successMessage = result.status === 'scheduled' ? "SMS Scheduled!" : "SMS Sent!";
                 logSMSMessage(message, result.status === 'scheduled' ? "(Scheduled)" : "(Sent)");
                 if (!auto) showSuccess(successMessage);
                 buttons.forEach(btn => { btn.textContent = "Sent/Scheduled!"; });
+
             } catch (error) {
                 showError(`Failed: ${error.message}`);
                 logSMSMessage(`Failed: ${message}`, "(Failed)");
