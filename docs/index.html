@@ -29,7 +29,7 @@
             <div class="transcript" id="transcript">Your speech will appear here...</div>
             <div class="extracted-tasks" id="extractedTasks"><h3>📋 Found Reminders:</h3><div id="taskList"></div></div>
             <div class="sms-log" id="smsLog"><h3>📱 SMS Log:</h3><div id="smsMessages"></div></div>
-            <div class="diary-entries"><h3>📖 Recent Entries</h3><button class="clear-btn" id="clearBtn">Clear All</button><div id="entriesList"></div></div>
+            <div class="diary-entries"><h3>📖 Recent Entries</h3><div id="entriesList"></div></div>
         </div>
 
         <div id="errorMsg" class="error-message hidden"><strong>Error:</strong> <span id="errorText"></span></div>
@@ -42,30 +42,12 @@
         let recognition = null;
         let isRecording = false;
         let entries = [];
-        let config = {};
+        let config = {}; // Config will be fresh every time
         let smsMessages = [];
         let finalTranscript = '';
 
         const setupSection = document.getElementById("setupSection"), mainApp = document.getElementById("mainApp"), voiceBtn = document.getElementById("voiceBtn"), btnText = document.getElementById("btnText"), status = document.getElementById("status"), transcript = document.getElementById("transcript"), extractedTasks = document.getElementById("extractedTasks"), taskList = document.getElementById("taskList"), smsLog = document.getElementById("smsLog"), smsMessagesDiv = document.getElementById("smsMessages"), errorMsg = document.getElementById("errorMsg"), errorText = document.getElementById("errorText"), successMsg = document.getElementById("successMsg"), successText = document.getElementById("successText");
         
-        function safeSetItem(key, value) { try { if (typeof Storage !== 'undefined' && localStorage) { localStorage.setItem(key, value); return true; } } catch (e) { console.log('Storage not available:', e.message); } return false; }
-        function safeGetItem(key) { try { if (typeof Storage !== 'undefined' && localStorage) { return localStorage.getItem(key); } } catch (e) { console.log('Storage not available:', e.message); } return null; }
-        function safeRemoveItem(key) { try { if (typeof Storage !== 'undefined' && localStorage) { localStorage.removeItem(key); return true; } } catch (e) { console.log('Storage not available:', e.message); } return false; }
-
-        function loadData() {
-            try {
-                const savedEntries = safeGetItem('diaryEntries');
-                const savedConfig = safeGetItem('twilioConfig');
-                const savedSMS = safeGetItem('smsMessages');
-                entries = savedEntries ? JSON.parse(savedEntries) : [];
-                config = savedConfig ? JSON.parse(savedConfig) : {};
-                smsMessages = savedSMS ? JSON.parse(savedSMS) : [];
-            } catch (e) {
-                console.log('Error loading data:', e);
-                entries = []; config = {}; smsMessages = [];
-            }
-        }
-
         function initSpeechRecognition() {
             if ('webkitSpeechRecognition' in window) { recognition = new webkitSpeechRecognition(); } 
             else if ('SpeechRecognition' in window) { recognition = new SpeechRecognition(); } 
@@ -112,17 +94,11 @@
                     processTranscript(finalTranscript.trim());
                 } else {
                     console.log("No final transcript to process.");
-                    showError("Could not hear anything to process. Please try again.");
-                    setTimeout(hideMessages, 3000);
                 }
             };
             
             recognition.onerror = function(event) {
                 console.error('Speech recognition error:', event.error);
-                let errorMessage = 'Speech recognition error: ' + event.error;
-                if (event.error === 'not-allowed') { errorMessage = 'Microphone access denied. Please allow microphone access and try again.'; }
-                else if (event.error === 'no-speech') { errorMessage = 'No speech detected. Please try speaking again.'; }
-                showError(errorMessage);
                 if (isRecording) stopRecording();
             };
             return true;
@@ -132,11 +108,11 @@
         function showSuccess(msg) { successText.textContent = msg; successMsg.classList.remove('hidden'); errorMsg.classList.add('hidden'); }
         function hideMessages() { errorMsg.classList.add('hidden'); successMsg.classList.add('hidden'); }
 
+        // This function no longer saves the config to localStorage
         async function saveConfig() {
             config = { twilioSid: document.getElementById('twilioSid').value.trim(), twilioToken: document.getElementById('twilioToken').value.trim(), twilioFrom: document.getElementById('twilioFrom').value.trim(), phoneNumber: document.getElementById('phoneNumber').value.trim() };
             if (!config.twilioSid || !config.twilioToken || !config.twilioFrom || !config.phoneNumber) return showError("Please fill in all fields");
-            safeSetItem('twilioConfig', JSON.stringify(config));
-            showSuccess("Configuration saved! App enabled.");
+            showSuccess("Credentials accepted! Loading app...");
             setTimeout(() => { hideMessages(); showMainApp(); }, 1500);
         }
 
@@ -145,10 +121,9 @@
             mainApp.classList.remove('hidden');
             voiceBtn.classList.add('enabled');
             status.textContent = 'Click microphone to start recording';
-            if (initSpeechRecognition()) {
-                updateEntriesDisplay();
-                updateSMSLog();
-            }
+            initSpeechRecognition();
+            updateSMSLog();
+            updateEntriesDisplay(); // Keep these for diary functionality
         }
 
         function toggleRecording() {
@@ -160,15 +135,15 @@
         function stopRecording() { if (recognition && isRecording) { recognition.stop(); } }
 
         function processTranscript(text) {
+            // We are keeping diary entries just for fun, they are not saved
             const entry = { id: Date.now(), text: text, date: (new Date).toLocaleString(), tasks: extractTasks(text) };
             entries.unshift(entry);
-            safeSetItem('diaryEntries', JSON.stringify(entries));
             updateEntriesDisplay();
             if (entry.tasks.length > 0) {
                 displayTasks(entry.tasks);
                 extractedTasks.classList.add('show');
                 autoSendImportantReminders(entry.tasks);
-                showSuccess(`Entry saved! Found ${entry.tasks.length} reminders.`);
+                showSuccess(`Found ${entry.tasks.length} reminders.`);
                 status.textContent = `Found ${entry.tasks.length} reminders!`;
             } else {
                 showSuccess('Entry saved! No reminders found.');
@@ -181,9 +156,6 @@
             const lowerText = text.toLowerCase(), now = new Date;
             if (lowerText.includes('tomorrow')) { const d = new Date(now); d.setDate(now.getDate() + 1); d.setHours(9, 0, 0, 0); return d; }
             if (lowerText.includes('tonight')) { const d = new Date(now); d.setHours(19, 0, 0, 0); return d; }
-            if (lowerText.includes('next week')) { const d = new Date(now); d.setDate(now.getDate() + 7); d.setHours(9, 0, 0, 0); return d; }
-            if (lowerText.includes('this weekend')) { const d = new Date(now); d.setDate(now.getDate() + (6 - now.getDay())); d.setHours(10, 0, 0, 0); return d; }
-            if (lowerText.includes('later today')) { const d = new Date(now); d.setHours(now.getHours() + 2); return d; }
             const match = lowerText.match(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
             if (match) {
                 const scheduledTime = new Date(now);
@@ -202,12 +174,7 @@
             const tasks = [];
             const patterns = [
                 { regex: /(?:need to|have to|must|should|gotta|got to)\s+([^.!?]+)/gi, type: 'task', priority: 'medium' },
-                { regex: /(?:remember to|don't forget to|remind me to)\s+([^.!?]+)/gi, type: 'reminder', priority: 'high' },
-                { regex: /(?:tomorrow|next week|later today|this weekend|tonight)\s+([^.!?]*)/gi, type: 'scheduled', priority: 'high' },
-                { regex: /(?:call|text|email|contact|ring)\s+([^.!?]+)/gi, type: 'communication', priority: 'medium' },
-                { regex: /(?:buy|pick up|get|purchase|grab)\s+([^.!?]+)/gi, type: 'shopping', priority: 'low' },
-                { regex: /(?:urgent|important|asap|immediately|crucial)\s+([^.!?]+)/gi, type: 'urgent', priority: 'high' },
-                { regex: /(?:book|schedule|make an appointment)\s+([^.!?]+)/gi, type: 'appointment', priority: 'medium' }
+                { regex: /(?:remember to|don't forget to|remind me to)\s+([^.!?]+)/gi, type: 'reminder', priority: 'high' }
             ];
             patterns.forEach(pattern => {
                 let match;
@@ -226,7 +193,7 @@
             tasks.forEach(task => {
                 const taskElement = document.createElement('div');
                 taskElement.className = 'task-item';
-                const priorityEmoji = task.priority === 'high' ? '🔥' : task.priority === 'medium' ? '⚡' : '📝';
+                const priorityEmoji = task.priority === 'high' ? '🔥' : 'medium' === '⚡' ? '📝' : '';
                 let scheduleInfo = '';
                 if (task.scheduledTime) scheduleInfo = `<br><small>⏰ Scheduled for: ${task.scheduledTime.toLocaleString()}</small>`;
                 taskElement.innerHTML = `<div><strong>${priorityEmoji} ${task.type}:</strong> ${task.extracted}<br><small>From: "${task.text}"</small>${scheduleInfo}<br><button class="send-sms-btn" data-task-id="${task.id}">Send SMS Now</button></div>`;
@@ -263,7 +230,7 @@
         }
 
         function findTaskById(taskId) { for (let entry of entries) { const task = entry.tasks.find(t => t.id == taskId); if (task) return task; } return null; }
-        function logSMSMessage(message, status) { smsMessages.unshift({ message, status, timestamp: (new Date).toLocaleString() }); safeSetItem('smsMessages', JSON.stringify(smsMessages)); }
+        function logSMSMessage(message, status) { smsMessages.unshift({ message, status, timestamp: (new Date).toLocaleString() }); updateSMSLog(); }
 
         function updateSMSLog() {
             if (smsMessages.length === 0) { smsLog.classList.remove('show'); return; }
@@ -289,40 +256,12 @@
             });
         }
         
-        // ########## THIS IS THE NEW, CORRECTED FUNCTION ##########
-        function clearEntries() {
-            if (confirm('This will clear all diary entries, SMS logs, AND your saved Twilio configuration. Proceed?')) {
-                entries = [];
-                smsMessages = [];
-                config = {}; // Clear config from memory
-                
-                // Remove all items from localStorage
-                safeRemoveItem('diaryEntries');
-                safeRemoveItem('smsMessages');
-                safeRemoveItem('twilioConfig'); 
-                
-                // Reload the page to go back to the setup screen
-                window.location.reload();
-            }
-        }
-        
-        // Initialize the app
-        loadData();
-        if (config.twilioSid && config.phoneNumber) {
-            document.getElementById('twilioSid').value = config.twilioSid;
-            document.getElementById('twilioToken').value = config.twilioToken;
-            document.getElementById('twilioFrom').value = config.twilioFrom;
-            document.getElementById('phoneNumber').value = config.phoneNumber;
-            showMainApp();
-        }
-
+        // This is the part that attaches the functions to the buttons
         document.addEventListener('DOMContentLoaded', () => {
             const saveButton = document.getElementById('saveBtn');
-            const clearButton = document.getElementById('clearBtn');
             const voiceButton = document.getElementById('voiceBtn');
 
             if (saveButton) saveButton.addEventListener('click', saveConfig);
-            if (clearButton) clearButton.addEventListener('click', clearEntries);
             if (voiceButton) voiceButton.addEventListener('click', toggleRecording);
         });
 
