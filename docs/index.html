@@ -18,7 +18,7 @@
             <p>Enter your Twilio credentials and phone number:</p>
             <div class="form-group"><label for="twilioSid">Twilio Account SID:</label><input type="password" id="twilioSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx" /></div>
             <div class="form-group"><label for="twilioToken">Twilio Auth Token:</label><input type="password" id="twilioToken" placeholder="Your secret auth token" /></div>
-            <div class="form-group"><label for="twilioFrom">Twilio Phone Number:</label><input type="tel" id="twilioFrom" placeholder="+15017122661" /></div>
+            <div class="form-group"><label for="messagingServiceSid">Messaging Service SID:</label><input type="password" id="messagingServiceSid" placeholder="MGxxxxxxxxxxxxxxxxxxxxxxxx" /></div>
             <div class="form-group"><label for="phoneNumber">Your Phone Number (to receive SMS):</label><input type="tel" id="phoneNumber" placeholder="+61412345678" /></div>
             <button class="save-config-btn" id="saveBtn">Save & Enable App</button>
         </div>
@@ -108,8 +108,13 @@
         function hideMessages() { errorMsg.classList.add('hidden'); successMsg.classList.add('hidden'); }
 
         async function saveConfig() {
-            config = { twilioSid: document.getElementById('twilioSid').value.trim(), twilioToken: document.getElementById('twilioToken').value.trim(), twilioFrom: document.getElementById('twilioFrom').value.trim(), phoneNumber: document.getElementById('phoneNumber').value.trim() };
-            if (!config.twilioSid || !config.twilioToken || !config.twilioFrom || !config.phoneNumber) return showError("Please fill in all fields");
+            config = { 
+                twilioSid: document.getElementById('twilioSid').value.trim(), 
+                twilioToken: document.getElementById('twilioToken').value.trim(), 
+                messagingServiceSid: document.getElementById('messagingServiceSid').value.trim(), 
+                phoneNumber: document.getElementById('phoneNumber').value.trim() 
+            };
+            if (!config.twilioSid || !config.twilioToken || !config.messagingServiceSid || !config.phoneNumber) return showError("Please fill in all fields");
             showSuccess("Credentials accepted! Loading app...");
             setTimeout(() => { hideMessages(); showMainApp(); }, 1500);
         }
@@ -132,7 +137,7 @@
         
         function startRecording() {
             if (recognition && !isRecording) {
-                finalTranscript = ''; 
+                finalTranscript = '';
                 try {
                     recognition.start();
                 } catch (e) {
@@ -160,87 +165,65 @@
             setTimeout(hideMessages, 3000);
         }
         
-        // ########## THIS IS THE NEW, UPGRADED FUNCTION ##########
         function parseScheduledTime(text) {
             const lowerText = text.toLowerCase();
             const now = new Date();
             let scheduledDate = null;
-
             const daysOfWeek = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
             const months = { january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11 };
-
-            // Find specific date like "June 25th" or "10th of July"
             const monthDayRegex = /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?/i;
             const dayMonthRegex = /(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i;
-            
             let dateMatch = lowerText.match(monthDayRegex) || lowerText.match(dayMonthRegex);
             if (dateMatch) {
                 const day = parseInt(dateMatch[1]) || parseInt(dateMatch[2]);
                 const monthName = (dateMatch[1] || dateMatch[2]).toLowerCase();
                 const monthIndex = months[monthName.substring(0,3)];
-                
                 scheduledDate = new Date();
                 scheduledDate.setMonth(monthIndex, day);
-                scheduledDate.setHours(9, 0, 0, 0); // Default 9am
-                
-                // If date is in the past, assume next year
+                scheduledDate.setHours(9, 0, 0, 0);
                 if (scheduledDate < now) {
                     scheduledDate.setFullYear(now.getFullYear() + 1);
                 }
             }
-
-            // Find day of week like "next Wednesday" or "on Friday"
             const dayRegex = /(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i;
             let dayMatch = lowerText.match(dayRegex);
-            if (dayMatch && !scheduledDate) { // Only run if we haven't already found a specific date
+            if (dayMatch && !scheduledDate) {
                 const isNextWeek = dayMatch[1];
                 const targetDayName = dayMatch[2];
                 const targetDayIndex = daysOfWeek[targetDayName];
                 const currentDayIndex = now.getDay();
-                
                 scheduledDate = new Date(now);
                 let dayDifference = targetDayIndex - currentDayIndex;
-                
-                if (dayDifference <= 0 && !isNextWeek) { // e.g., it's Friday and user says "Wednesday"
+                if (dayDifference <= 0 && !isNextWeek) {
                     dayDifference += 7;
                 }
-                if (isNextWeek) { // User explicitly said "next..."
+                if (isNextWeek) {
                     dayDifference += 7;
                 }
-                
                 scheduledDate.setDate(now.getDate() + dayDifference);
-                scheduledDate.setHours(9, 0, 0, 0); // Default 9am
+                scheduledDate.setHours(9, 0, 0, 0);
             }
-
-            // Relative terms if no other date was found
             if (!scheduledDate) {
                 if (lowerText.includes('tomorrow')) { scheduledDate = new Date(); scheduledDate.setDate(now.getDate() + 1); scheduledDate.setHours(9,0,0,0); }
                 else if (lowerText.includes('tonight')) { scheduledDate = new Date(); scheduledDate.setHours(19,0,0,0); }
                 else if (lowerText.includes('later today')) { scheduledDate = new Date(); scheduledDate.setHours(now.getHours() + 2); }
             }
-
-            // If we have a date, let's see if there's a specific time
             const timeMatch = lowerText.match(/(?:at\s+|@\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
             if (timeMatch) {
-                if (!scheduledDate) { // If no date specified, assume today or tomorrow
+                if (!scheduledDate) {
                     scheduledDate = new Date(now);
                 }
                 let hours = parseInt(timeMatch[1]);
                 const minutes = parseInt(timeMatch[2] || 0);
                 const ampm = timeMatch[3] ? timeMatch[3].toLowerCase() : null;
-                
                 if (ampm === 'pm' && hours !== 12) hours += 12;
-                if (ampm === 'am' && hours === 12) hours = 0; // Midnight case
-                
+                if (ampm === 'am' && hours === 12) hours = 0;
                 scheduledDate.setHours(hours, minutes, 0, 0);
-
-                // If the final time is in the past (and it was a time-only request), move to next day
                 if (scheduledDate < now && !dateMatch && !dayMatch) {
                     scheduledDate.setDate(scheduledDate.getDate() + 1);
                 }
             }
-
-            return scheduledDate; // This will be null if no time/date found
+            return scheduledDate;
         }
 
         function extractTasks(text) {
@@ -281,28 +264,27 @@
         async function sendTaskSMS(taskId, auto = false) {
             const task = findTaskById(taskId);
             if (!task) return;
-
             const message = `🦝 Trash Panda Reminder: ${task.extracted}`;
             const payload = {
-                twilioSid: config.twilioSid, twilioToken: config.twilioToken, twilioFrom: config.twilioFrom, phoneNumber: config.phoneNumber, message: message
+                twilioSid: config.twilioSid, 
+                twilioToken: config.twilioToken, 
+                messagingServiceSid: config.messagingServiceSid, 
+                phoneNumber: config.phoneNumber, 
+                message: message
             };
             if (task.scheduledTime) {
                 payload.scheduledTime = task.scheduledTime;
             }
-
             const buttons = taskList.querySelectorAll(`[data-task-id="${taskId}"]`);
             buttons.forEach(btn => { btn.textContent = "Sending..."; btn.disabled = true; });
-
             try {
                 const response = await fetch(`${BACKEND_URL}/send-sms`, { method: 'POST', headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                 const result = await response.json();
                 if (!response.ok || !result.success) throw new Error(result.error || "Unknown server error");
-                
                 const successMessage = result.status === 'scheduled' ? "SMS Scheduled successfully!" : "Real SMS sent successfully!";
                 logSMSMessage(message, result.status === 'scheduled' ? "auto-sent (Scheduled)" : "auto-sent (Real)");
                 if (!auto) showSuccess(successMessage);
                 buttons.forEach(btn => { btn.textContent = "Sent/Scheduled!"; });
-
             } catch (error) {
                 console.error("Error sending SMS:", error);
                 showError(`Failed to send SMS: ${error.message}`);
@@ -344,14 +326,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             const saveButton = document.getElementById('saveBtn');
             const voiceButton = document.getElementById('voiceBtn');
-
             if (saveButton) saveButton.addEventListener('click', saveConfig);
             if (voiceButton) voiceButton.addEventListener('click', toggleRecording);
-            
-            // This line ensures the app starts on the setup screen every time.
             setupSection.classList.remove('hidden');
         });
-
     </script>
 </body>
 </html>
