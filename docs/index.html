@@ -63,7 +63,6 @@
                 voiceBtn.classList.add('recording');
                 btnText.textContent = '⏹️';
                 status.textContent = 'Recording... tap to stop';
-                finalTranscript = '';
                 hideMessages();
                 showSuccess('Listening... speak now!');
             };
@@ -108,7 +107,6 @@
         function showSuccess(msg) { successText.textContent = msg; successMsg.classList.remove('hidden'); errorMsg.classList.add('hidden'); }
         function hideMessages() { errorMsg.classList.add('hidden'); successMsg.classList.add('hidden'); }
 
-        // This function no longer saves the config to localStorage
         async function saveConfig() {
             config = { twilioSid: document.getElementById('twilioSid').value.trim(), twilioToken: document.getElementById('twilioToken').value.trim(), twilioFrom: document.getElementById('twilioFrom').value.trim(), phoneNumber: document.getElementById('phoneNumber').value.trim() };
             if (!config.twilioSid || !config.twilioToken || !config.twilioFrom || !config.phoneNumber) return showError("Please fill in all fields");
@@ -121,21 +119,32 @@
             mainApp.classList.remove('hidden');
             voiceBtn.classList.add('enabled');
             status.textContent = 'Click microphone to start recording';
-            initSpeechRecognition();
-            updateSMSLog();
-            updateEntriesDisplay(); // Keep these for diary functionality
+            if (initSpeechRecognition()) {
+                updateSMSLog();
+                updateEntriesDisplay();
+            }
         }
 
         function toggleRecording() {
             if (!recognition) { showError('Speech recognition not initialized.'); return; }
             if (isRecording) { stopRecording(); } else { startRecording(); }
         }
-
-        function startRecording() { if (recognition && !isRecording) { try { recognition.start(); } catch (e) { console.error("Could not start recording:", e); } } }
+        
+        // ########## THIS IS THE CORRECTED FUNCTION ##########
+        function startRecording() {
+            if (recognition && !isRecording) {
+                finalTranscript = ''; // The transcript is now cleared ONLY when you start a new recording.
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.error("Could not start recording:", e);
+                }
+            }
+        }
+        
         function stopRecording() { if (recognition && isRecording) { recognition.stop(); } }
 
         function processTranscript(text) {
-            // We are keeping diary entries just for fun, they are not saved
             const entry = { id: Date.now(), text: text, date: (new Date).toLocaleString(), tasks: extractTasks(text) };
             entries.unshift(entry);
             updateEntriesDisplay();
@@ -256,7 +265,6 @@
             });
         }
         
-        // This is the part that attaches the functions to the buttons
         document.addEventListener('DOMContentLoaded', () => {
             const saveButton = document.getElementById('saveBtn');
             const voiceButton = document.getElementById('voiceBtn');
@@ -264,7 +272,6 @@
             if (saveButton) saveButton.addEventListener('click', saveConfig);
             if (voiceButton) voiceButton.addEventListener('click', toggleRecording);
         });
-
     </script>
 </body>
 </html>
