@@ -2,7 +2,7 @@
 name: Deploy Frontend to GitHub Pages
 
 # Run this workflow every time a change is pushed to the 'main' branch
-on:
+on: 
   push:
     branches: ["main"]
 
