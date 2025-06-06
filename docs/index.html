@@ -130,7 +130,6 @@
             if (isRecording) { stopRecording(); } else { startRecording(); }
         }
         
-        // ########## THIS IS THE CORRECTED FUNCTION ##########
         function startRecording() {
             if (recognition && !isRecording) {
                 finalTranscript = ''; // The transcript is now cleared ONLY when you start a new recording.
@@ -152,7 +151,7 @@
                 displayTasks(entry.tasks);
                 extractedTasks.classList.add('show');
                 autoSendImportantReminders(entry.tasks);
-                showSuccess(`Found ${entry.tasks.length} reminders.`);
+                showSuccess(`Entry saved! Found ${entry.tasks.length} reminders.`);
                 status.textContent = `Found ${entry.tasks.length} reminders!`;
             } else {
                 showSuccess('Entry saved! No reminders found.');
@@ -173,7 +172,10 @@
                 if (ampm === 'pm' && hours !== 12) hours += 12;
                 if (ampm === 'am' && hours === 12) hours = 0;
                 scheduledTime.setHours(hours, minutes, 0, 0);
-                if (scheduledTime < now) scheduledTime.setDate(now.getDate() + 1);
+                // If the calculated time is in the past, assume it's for the next day
+                if (scheduledTime < now) {
+                    scheduledTime.setDate(now.getDate() + 1);
+                }
                 return scheduledTime;
             }
             return null;
@@ -202,9 +204,11 @@
             tasks.forEach(task => {
                 const taskElement = document.createElement('div');
                 taskElement.className = 'task-item';
-                const priorityEmoji = task.priority === 'high' ? '🔥' : 'medium' === '⚡' ? '📝' : '';
+                const priorityEmoji = task.priority === 'high' ? '🔥' : '⚡';
                 let scheduleInfo = '';
-                if (task.scheduledTime) scheduleInfo = `<br><small>⏰ Scheduled for: ${task.scheduledTime.toLocaleString()}</small>`;
+                if (task.scheduledTime) {
+                    scheduleInfo = `<br><small>⏰ Scheduled for: ${task.scheduledTime.toLocaleString()}</small>`;
+                }
                 taskElement.innerHTML = `<div><strong>${priorityEmoji} ${task.type}:</strong> ${task.extracted}<br><small>From: "${task.text}"</small>${scheduleInfo}<br><button class="send-sms-btn" data-task-id="${task.id}">Send SMS Now</button></div>`;
                 taskList.appendChild(taskElement);
             });
@@ -212,21 +216,45 @@
         }
 
         function autoSendImportantReminders(tasks) { tasks.forEach(task => { if (task.priority === 'high' || task.type === 'urgent') setTimeout(() => sendTaskSMS(task.id, true), 1000); }); }
-
+        
+        // ########## THIS IS THE NEW, CORRECTED FUNCTION ##########
         async function sendTaskSMS(taskId, auto = false) {
             const task = findTaskById(taskId);
             if (!task) return;
+
             const message = `🦝 Trash Panda Reminder: ${task.extracted}`;
+            
+            // This is the data package we send to the backend
+            const payload = {
+                twilioSid: config.twilioSid,
+                twilioToken: config.twilioToken,
+                twilioFrom: config.twilioFrom,
+                phoneNumber: config.phoneNumber,
+                message: message
+            };
+
+            // If the task has a scheduled time, add it to the payload
+            if (task.scheduledTime) {
+                payload.scheduledTime = task.scheduledTime;
+            }
+
             const buttons = taskList.querySelectorAll(`[data-task-id="${taskId}"]`);
             buttons.forEach(btn => { btn.textContent = "Sending..."; btn.disabled = true; });
+
             try {
-                const response = await fetch(`${BACKEND_URL}/send-sms`, { method: 'POST', headers: { "Content-Type": "application/json" }, body: JSON.stringify({ twilioSid: config.twilioSid, twilioToken: config.twilioToken, twilioFrom: config.twilioFrom, phoneNumber: config.phoneNumber, message: message }) });
+                const response = await fetch(`${BACKEND_URL}/send-sms`, { 
+                    method: 'POST', 
+                    headers: { "Content-Type": "application/json" }, 
+                    body: JSON.stringify(payload) // Send the payload
+                });
                 const result = await response.json();
                 if (!response.ok || !result.success) throw new Error(result.error || "Unknown server error");
-                console.log("Server confirmed SMS sent:", result.sid);
-                logSMSMessage(message, auto ? "auto-sent (Real)" : "manual-sent (Real)");
-                if (!auto) showSuccess("Real SMS sent successfully!");
-                buttons.forEach(btn => { btn.textContent = "Sent!"; });
+                
+                const successMessage = result.status === 'scheduled' ? "SMS Scheduled successfully!" : "Real SMS sent successfully!";
+                logSMSMessage(message, result.status === 'scheduled' ? "auto-sent (Scheduled)" : "auto-sent (Real)");
+                if (!auto) showSuccess(successMessage);
+                buttons.forEach(btn => { btn.textContent = "Sent/Scheduled!"; });
+
             } catch (error) {
                 console.error("Error sending SMS:", error);
                 showError(`Failed to send SMS: ${error.message}`);
@@ -234,7 +262,7 @@
                 buttons.forEach(btn => { btn.textContent = "Send SMS Now"; btn.disabled = false; });
             } finally {
                 updateSMSLog();
-                if (!auto) setTimeout(hideMessages, 3000);
+                if (!auto) setTimeout(hideMessages, 4000);
             }
         }
 
@@ -248,7 +276,7 @@
             smsMessages.slice(0, 10).forEach(sms => {
                 const smsElement = document.createElement('div');
                 smsElement.className = 'sms-message';
-                const statusEmoji = sms.status === 'auto-sent (Real)' ? '🤖' : '👤';
+                const statusEmoji = sms.status.includes('Scheduled') ? '⏰' : sms.status.includes('Real') ? '✅' : '❌';
                 smsElement.innerHTML = `<strong>${statusEmoji} ${sms.timestamp}</strong><br>${sms.message}`;
                 smsMessagesDiv.appendChild(smsElement);
             });
